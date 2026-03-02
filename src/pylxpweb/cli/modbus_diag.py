@@ -803,7 +803,7 @@ def _analyze_rotation(
     print(f"\n  Page frequency ({len(valid)} valid reads):")
     for page_key, count in page_counts.most_common():
         pct = count / len(valid) * 100
-        pos_str = ",".join(str(p) for p in page_key)  # type: ignore[union-attr]
+        pos_str = ",".join(str(p) for p in page_key)
         line = f"  pos=[{pos_str}]: {count} reads ({pct:.0f}%)"
         lines.append(line)
         print(f"  {line}")
