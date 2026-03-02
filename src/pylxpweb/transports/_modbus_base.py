@@ -32,7 +32,7 @@ from .protocol import BaseTransport
 
 if TYPE_CHECKING:
     from pylxpweb.devices.inverters._features import InverterFamily
-    from pylxpweb.transports.data import BatteryBankData
+    from pylxpweb.transports.data import BatteryBankData, InverterEnergyData, InverterRuntimeData
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -365,8 +365,25 @@ class BaseModbusTransport(RegisterDataMixin, BaseTransport):
         return registers
 
     # ------------------------------------------------------------------
-    # Override: read_battery with reconnect check
+    # Overrides: combined read + read_battery with reconnect check
     # ------------------------------------------------------------------
+
+    async def read_all_input_data(
+        self,
+    ) -> tuple[InverterRuntimeData, InverterEnergyData, BatteryBankData | None]:
+        """Read all input registers with reconnect on consecutive errors.
+
+        Overrides ``RegisterDataMixin.read_all_input_data`` to add the same
+        auto-reconnect check that ``_read_register_groups`` has.  Without this
+        override, a dropped TCP connection is never healed in HYBRID mode
+        because the combined read path bypasses ``_read_register_groups``
+        entirely, so ``_consecutive_errors`` accumulates but the reconnect
+        gate never fires.
+        """
+        if self._consecutive_errors >= self._max_consecutive_errors:
+            await self._reconnect()
+
+        return await super().read_all_input_data()
 
     async def read_battery(
         self,

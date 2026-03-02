@@ -49,6 +49,12 @@ if TYPE_CHECKING:
 
 _LOGGER = logging.getLogger(__name__)
 
+# Absolute ceiling for any single lifetime energy counter (kWh).  Values above
+# this indicate 32-bit register corruption (e.g. a high-word bit flip).  A
+# 21 kW inverter running continuously for 50 years accumulates ~9.2 GWh total,
+# so 1 GWh per individual counter is unreachable in any realistic service life.
+_MAX_LIFETIME_ENERGY_KWH = 999_999.0
+
 # Fields on InverterRuntimeData that store raw int values (no ÷10/÷100 scaling).
 # Used by from_modbus_registers() to decide between read_raw() and read_scaled().
 _RUNTIME_INT_FIELDS: frozenset[str] = frozenset(
@@ -575,11 +581,29 @@ class InverterEnergyData:
     def is_corrupt(self) -> bool:
         """Check if energy data contains physically impossible values.
 
-        Energy registers have no strong physical-bounds canaries (all values
-        are monotonic counters or daily accumulations). Temporal validation
-        (monotonicity checks) occurs in the device refresh layer via
-        ``_is_energy_valid()``.
+        Applies an absolute ceiling to lifetime energy counters to catch
+        32-bit register corruption (e.g. a high-word bit flip producing
+        hundreds of MWh on first read before monotonicity has a baseline).
+
+        The ceiling of 999,999 kWh (1 GWh) per counter is physically
+        unreachable for a single residential or commercial inverter within
+        any realistic service life.  A corrupted 32-bit high word produces
+        values in the millions of kWh range and will be caught here.
+
+        Note: This check does NOT catch subtle first-read deltas (e.g. a
+        single high-word unit flip = ~6,553 kWh).  Those are handled by
+        the monotonicity check on subsequent refreshes.  This method is
+        gated by ``validate_data`` at the call site in ``base.py``.
         """
+        for key, value in self.lifetime_energy_values().items():
+            if value is not None and value > _MAX_LIFETIME_ENERGY_KWH:
+                _LOGGER.debug(
+                    "Energy counter %s value %.1f kWh exceeds absolute ceiling %.0f kWh",
+                    key,
+                    value,
+                    _MAX_LIFETIME_ENERGY_KWH,
+                )
+                return True
         return False
 
     @classmethod

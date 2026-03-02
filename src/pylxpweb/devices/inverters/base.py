@@ -707,12 +707,10 @@ class BaseInverter(FirmwareUpdateMixin, InverterRuntimePropertiesMixin, BaseDevi
                         self.serial_number,
                     )
                     return  # Discard entire combined read
-                # energy.is_corrupt() currently returns False (no physical
-                # canaries for energy registers); kept as a forward-looking
-                # guard so future canary additions take effect automatically.
                 if energy.is_corrupt():
                     _LOGGER.warning(
-                        "Corrupt energy in combined read for %s",
+                        "Corrupt energy in combined read for %s "
+                        "(lifetime counter exceeds absolute ceiling)",
                         self.serial_number,
                     )
                     return
@@ -720,10 +718,19 @@ class BaseInverter(FirmwareUpdateMixin, InverterRuntimePropertiesMixin, BaseDevi
             self._runtime_cache_time = datetime.now()
             # Energy monotonicity: accept runtime regardless, but keep
             # cached energy if lifetime counters are corrupt.
-            energy_valid = self._transport_energy is None or self._is_energy_valid(
-                self._transport_energy.lifetime_energy_values(),
-                energy.lifetime_energy_values(),
-            )
+            # On first refresh (_transport_energy is None) there is no
+            # prior baseline for monotonicity.  When validate_data is
+            # enabled the is_corrupt() gate above already rejected any
+            # corrupt first read, so energy_valid is unconditionally True
+            # here.  When validate_data is disabled, first reads are always
+            # accepted.
+            if self._transport_energy is None:
+                energy_valid = True
+            else:
+                energy_valid = self._is_energy_valid(
+                    self._transport_energy.lifetime_energy_values(),
+                    energy.lifetime_energy_values(),
+                )
             if energy_valid:
                 prev_daily = (
                     self._transport_energy.daily_energy_values()
