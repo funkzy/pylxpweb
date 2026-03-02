@@ -208,10 +208,13 @@ class InverterRuntimePropertiesMixin:
     def eps_power_l1(self) -> int:
         """Get EPS L1 power in watts.
 
-        When using local transport, computes L1 share from total EPS power
-        proportional to L1/L2 voltages. Falls back to cloud data.
+        Prefers direct register 129 read when available. Falls back to
+        voltage-ratio computation for older firmware or GridBOSS setups.
         """
         if self._transport_runtime is not None:
+            val = self._transport_runtime.eps_l1_power
+            if val is not None:
+                return val
             return self._compute_eps_leg_power("l1")
         if self._runtime is None:
             return 0
@@ -221,14 +224,27 @@ class InverterRuntimePropertiesMixin:
     def eps_power_l2(self) -> int:
         """Get EPS L2 power in watts.
 
-        When using local transport, computes L2 share from total EPS power
-        proportional to L1/L2 voltages. Falls back to cloud data.
+        Prefers direct register 130 read when available. Falls back to
+        voltage-ratio computation for older firmware or GridBOSS setups.
         """
         if self._transport_runtime is not None:
+            val = self._transport_runtime.eps_l2_power
+            if val is not None:
+                return val
             return self._compute_eps_leg_power("l2")
         if self._runtime is None:
             return 0
         return self._runtime.pEpsL2N
+
+    @property
+    def eps_apparent_power_l1(self) -> int | None:
+        """Get EPS L1 apparent power in VA (reg 131)."""
+        return self._raw_int("eps_l1_apparent_power", "sEpsL1N")
+
+    @property
+    def eps_apparent_power_l2(self) -> int | None:
+        """Get EPS L2 apparent power in VA (reg 132)."""
+        return self._raw_int("eps_l2_apparent_power", "sEpsL2N")
 
     def _compute_eps_leg_power(self, leg: str) -> int:
         """Compute per-leg EPS power from local transport data.
@@ -410,6 +426,60 @@ class InverterRuntimePropertiesMixin:
         if self._runtime is None:
             return False
         return self._runtime._12KUsingGenerator
+
+    # ===========================================
+    # US Split-Phase Per-Leg Properties (regs 195-204)
+    # ===========================================
+
+    @property
+    def generator_l1_voltage(self) -> float | None:
+        """Get generator L1 voltage in volts (reg 195)."""
+        return self._scaled_float("generator_l1_voltage", "genVoltL1")
+
+    @property
+    def generator_l2_voltage(self) -> float | None:
+        """Get generator L2 voltage in volts (reg 196)."""
+        return self._scaled_float("generator_l2_voltage", "genVoltL2")
+
+    @property
+    def inverter_power_l1(self) -> int | None:
+        """Get inverter power L1 in watts (reg 197)."""
+        return self._raw_int("inverter_power_l1", "pinvL1")
+
+    @property
+    def inverter_power_l2(self) -> int | None:
+        """Get inverter power L2 in watts (reg 198)."""
+        return self._raw_int("inverter_power_l2", "pinvL2")
+
+    @property
+    def rectifier_power_l1(self) -> int | None:
+        """Get rectifier power L1 in watts (reg 199)."""
+        return self._raw_int("rectifier_power_l1", "precL1")
+
+    @property
+    def rectifier_power_l2(self) -> int | None:
+        """Get rectifier power L2 in watts (reg 200)."""
+        return self._raw_int("rectifier_power_l2", "precL2")
+
+    @property
+    def grid_export_power_l1(self) -> int | None:
+        """Get grid export power L1 in watts (reg 201)."""
+        return self._raw_int("grid_export_power_l1", "pToGridL1")
+
+    @property
+    def grid_export_power_l2(self) -> int | None:
+        """Get grid export power L2 in watts (reg 202)."""
+        return self._raw_int("grid_export_power_l2", "pToGridL2")
+
+    @property
+    def grid_import_power_l1(self) -> int | None:
+        """Get grid import power L1 in watts (reg 203)."""
+        return self._raw_int("grid_import_power_l1", "pToUserL1")
+
+    @property
+    def grid_import_power_l2(self) -> int | None:
+        """Get grid import power L2 in watts (reg 204)."""
+        return self._raw_int("grid_import_power_l2", "pToUserL2")
 
     # ===========================================
     # Consumption Properties

@@ -62,10 +62,10 @@ INPUT_REGISTER_GROUPS: dict[str, tuple[int, int]] = {
     "status_energy": (32, 32),  # Registers 32-63: Status, energy, fault/warning codes
     "temperatures": (64, 16),  # Registers 64-79: Temps, currents, fault history
     "bms_data": (80, 33),  # Registers 80-112: BMS passthrough data
-    "extended_data": (113, 18),  # Registers 113-130: Parallel config, generator, EPS
+    "extended_data": (113, 26),  # Regs 113-138: Parallel, generator, EPS, per-leg
     "eps_split_phase": (140, 3),  # Registers 140-142: EPS L1/L2 voltages
     "output_power": (170, 2),  # Registers 170-171: Output power
-    "split_phase_grid": (193, 4),  # Registers 193-196: Split-phase grid L1/L2 voltages
+    "split_phase_grid": (193, 12),  # Registers 193-204: Split-phase grid voltages + per-leg power
 }
 
 # GridBOSS/MID register groups for ``read_midbox_runtime``

@@ -461,6 +461,8 @@ class TestInverterEnergyLifetimeValues:
             load_energy_total=600.0,
             inverter_energy_total=700.0,
             eps_energy_total=800.0,
+            eps_l1_energy_total=900.0,
+            eps_l2_energy_total=1000.0,
         )
         result = data.lifetime_energy_values()
         assert result == {
@@ -472,6 +474,8 @@ class TestInverterEnergyLifetimeValues:
             "load_energy_total": 600.0,
             "inverter_energy_total": 700.0,
             "eps_energy_total": 800.0,
+            "eps_l1_energy_total": 900.0,
+            "eps_l2_energy_total": 1000.0,
         }
 
     def test_none_fields_preserved(self) -> None:
@@ -479,7 +483,7 @@ class TestInverterEnergyLifetimeValues:
         data = InverterEnergyData()
         result = data.lifetime_energy_values()
         assert all(v is None for v in result.values())
-        assert len(result) == 8
+        assert len(result) == 10
 
 
 class TestMidboxRuntimeLifetimeValues:

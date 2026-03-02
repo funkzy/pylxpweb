@@ -49,6 +49,33 @@ if TYPE_CHECKING:
 
 _LOGGER = logging.getLogger(__name__)
 
+# Fields on InverterRuntimeData that store raw int values (no ÷10/÷100 scaling).
+# Used by from_modbus_registers() to decide between read_raw() and read_scaled().
+_RUNTIME_INT_FIELDS: frozenset[str] = frozenset(
+    {
+        "device_status",
+        "eps_status",
+        "bms_cycle_count",
+        "battery_parallel_num",
+        "inverter_on_time",
+        "ac_input_type",
+        # EPS per-leg power (regs 129-132)
+        "eps_l1_power",
+        "eps_l2_power",
+        "eps_l1_apparent_power",
+        "eps_l2_apparent_power",
+        # Split-phase per-leg grid power (regs 197-204)
+        "inverter_power_l1",
+        "inverter_power_l2",
+        "rectifier_power_l1",
+        "rectifier_power_l2",
+        "grid_export_power_l1",
+        "grid_export_power_l2",
+        "grid_import_power_l1",
+        "grid_import_power_l2",
+    }
+)
+
 
 # Legacy helper aliases are now imported from _canonical_reader.py:
 # _clamp_percentage = clamp_percentage
@@ -134,6 +161,11 @@ class InverterRuntimeData:
     eps_frequency: float | None = None  # Hz
     eps_power: float | None = None  # W
     eps_status: int | None = None  # Status code
+    # EPS per-leg power (split-phase, regs 129-132)
+    eps_l1_power: int | None = None  # W
+    eps_l2_power: int | None = None  # W
+    eps_l1_apparent_power: int | None = None  # VA
+    eps_l2_apparent_power: int | None = None  # VA
 
     # Load
     load_power: float | None = None  # W
@@ -167,6 +199,20 @@ class InverterRuntimeData:
     generator_voltage: float | None = None  # V
     generator_frequency: float | None = None  # Hz
     generator_power: float | None = None  # W
+
+    # -------------------------------------------------------------------------
+    # US Split-Phase Per-Leg Power (regs 195-204)
+    # -------------------------------------------------------------------------
+    generator_l1_voltage: float | None = None  # V
+    generator_l2_voltage: float | None = None  # V
+    inverter_power_l1: int | None = None  # W
+    inverter_power_l2: int | None = None  # W
+    rectifier_power_l1: int | None = None  # W
+    rectifier_power_l2: int | None = None  # W
+    grid_export_power_l1: int | None = None  # W
+    grid_export_power_l2: int | None = None  # W
+    grid_import_power_l1: int | None = None  # W
+    grid_import_power_l2: int | None = None  # W
 
     # -------------------------------------------------------------------------
     # BMS Limits and Cell Data
@@ -407,16 +453,7 @@ class InverterRuntimeData:
                     bms_warning_code = read_raw(input_registers, reg)
                 continue
 
-            # Fields that need raw int values (no scaling)
-            int_fields = {
-                "device_status",
-                "eps_status",
-                "bms_cycle_count",
-                "battery_parallel_num",
-                "inverter_on_time",
-                "ac_input_type",
-            }
-            if field_name in int_fields:
+            if field_name in _RUNTIME_INT_FIELDS:
                 kwargs[field_name] = read_raw(input_registers, reg)
             else:
                 kwargs[field_name] = read_scaled(input_registers, reg)
@@ -491,6 +528,12 @@ class InverterEnergyData:
     generator_energy_today: float | None = None  # kWh
     generator_energy_total: float | None = None  # kWh
 
+    # EPS per-leg energy (split-phase, regs 133-138)
+    eps_l1_energy_today: float | None = None  # kWh
+    eps_l2_energy_today: float | None = None  # kWh
+    eps_l1_energy_total: float | None = None  # kWh
+    eps_l2_energy_total: float | None = None  # kWh
+
     def daily_energy_values(self) -> dict[str, float | None]:
         """Return all daily energy fields as a dict for bounds validation.
 
@@ -506,6 +549,8 @@ class InverterEnergyData:
             "load_energy_today": self.load_energy_today,
             "inverter_energy_today": self.inverter_energy_today,
             "eps_energy_today": self.eps_energy_today,
+            "eps_l1_energy_today": self.eps_l1_energy_today,
+            "eps_l2_energy_today": self.eps_l2_energy_today,
         }
 
     def lifetime_energy_values(self) -> dict[str, float | None]:
@@ -523,6 +568,8 @@ class InverterEnergyData:
             "load_energy_total": self.load_energy_total,
             "inverter_energy_total": self.inverter_energy_total,
             "eps_energy_total": self.eps_energy_total,
+            "eps_l1_energy_total": self.eps_l1_energy_total,
+            "eps_l2_energy_total": self.eps_l2_energy_total,
         }
 
     def is_corrupt(self) -> bool:

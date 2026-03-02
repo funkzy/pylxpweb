@@ -90,6 +90,11 @@ RUNTIME_FIELD: dict[str, str | None] = {
     "inverter_rms_current_r": "inverter_rms_current_r",
     "inverter_rms_current_s": "inverter_rms_current_s",
     "inverter_rms_current_t": "inverter_rms_current_t",
+    # EPS per-leg power (split-phase, regs 129-132)
+    "eps_l1_power": "eps_l1_power",
+    "eps_l2_power": "eps_l2_power",
+    "eps_l1_apparent_power": "eps_l1_apparent_power",
+    "eps_l2_apparent_power": "eps_l2_apparent_power",
     # Generator
     "generator_voltage": "generator_voltage",
     "generator_frequency": "generator_frequency",
@@ -97,6 +102,17 @@ RUNTIME_FIELD: dict[str, str | None] = {
     # Operational
     "running_time": "inverter_on_time",
     "ac_input_type": "ac_input_type",
+    # US split-phase per-leg grid power (regs 195-204)
+    "generator_l1_voltage": "generator_l1_voltage",
+    "generator_l2_voltage": "generator_l2_voltage",
+    "inverter_power_l1": "inverter_power_l1",
+    "inverter_power_l2": "inverter_power_l2",
+    "rectifier_power_l1": "rectifier_power_l1",
+    "rectifier_power_l2": "rectifier_power_l2",
+    "grid_export_power_l1": "grid_export_power_l1",
+    "grid_export_power_l2": "grid_export_power_l2",
+    "grid_import_power_l1": "grid_import_power_l1",
+    "grid_import_power_l2": "grid_import_power_l2",
     # Parallel
     "parallel_config": None,  # → parallel_master_slave, parallel_phase, parallel_number
 }
@@ -139,6 +155,11 @@ ENERGY_FIELD: dict[str, str | None] = {
     "ac_charge_energy_total": "load_energy_total",
     "generator_energy_today": "generator_energy_today",
     "generator_energy_total": "generator_energy_total",
+    # EPS per-leg energy (split-phase, regs 133-138)
+    "eps_l1_energy_today": "eps_l1_energy_today",
+    "eps_l2_energy_today": "eps_l2_energy_today",
+    "eps_l1_energy_total": "eps_l1_energy_total",
+    "eps_l2_energy_total": "eps_l2_energy_total",
 }
 
 # =========================================================================
