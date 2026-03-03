@@ -29,7 +29,7 @@ import asyncio
 import contextlib
 import logging
 import struct
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from ._register_data import RegisterDataMixin
 from .capabilities import MODBUS_CAPABILITIES, TransportCapabilities
@@ -43,6 +43,8 @@ from .protocol import BaseTransport
 
 if TYPE_CHECKING:
     from pylxpweb.devices.inverters._features import InverterFamily
+
+    from .data import BatteryBankData, InverterEnergyData, InverterRuntimeData, MidboxRuntimeData
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -851,3 +853,61 @@ class DongleTransport(RegisterDataMixin, BaseTransport):
     # Data reading/writing methods (read_runtime, read_energy, read_battery,
     # read_midbox_runtime, read_parameters, write_parameters, device info)
     # are inherited from RegisterDataMixin via _register_data.py.
+
+    # ------------------------------------------------------------------
+    # Operation-level serialisation (self._op_lock)
+    # ------------------------------------------------------------------
+    # The WiFi dongle processes ONE request at a time over its single TCP
+    # connection.  High-level operations that issue multiple sequential
+    # register reads release self._lock (per-transaction) between calls,
+    # allowing concurrent writes to interleave and confuse the protocol.
+    #
+    # self._op_lock (a task-reentrant lock from BaseTransport) serialises
+    # entire multi-step operations so that writes wait until a read
+    # sequence is fully complete — and vice-versa.
+    #
+    # Re-entrancy is required because write_named_parameters (BaseTransport)
+    # calls self.read_parameters + self.write_parameters internally, which
+    # also acquire self._op_lock.
+
+    async def read_midbox_runtime(self) -> MidboxRuntimeData:
+        """Serialised read of MID/GridBOSS runtime data (5 INPUT + 1 HOLD read)."""
+        async with self._op_lock:
+            return await super().read_midbox_runtime()
+
+    async def read_all_input_data(
+        self,
+    ) -> tuple[InverterRuntimeData, InverterEnergyData, BatteryBankData | None]:
+        """Serialised combined read of all input register groups."""
+        async with self._op_lock:
+            return await super().read_all_input_data()
+
+    async def read_parameters(
+        self,
+        start_address: int,
+        count: int,
+    ) -> dict[int, int]:
+        """Serialised read of holding (configuration) registers."""
+        async with self._op_lock:
+            return await super().read_parameters(start_address, count)
+
+    async def write_parameters(
+        self,
+        parameters: dict[int, int],
+    ) -> bool:
+        """Serialised write of holding (configuration) registers."""
+        async with self._op_lock:
+            return await super().write_parameters(parameters)
+
+    async def write_named_parameters(
+        self,
+        parameters: dict[str, Any],
+    ) -> bool:
+        """Serialised read-modify-write of named parameters.
+
+        Acquires op_lock for the full call so the RMW is atomic relative to
+        concurrent reads.  The internal calls to read_parameters /
+        write_parameters re-enter the reentrant lock without blocking.
+        """
+        async with self._op_lock:
+            return await super().write_named_parameters(parameters)

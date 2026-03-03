@@ -7,6 +7,7 @@ implementations must follow. Using Protocol allows for structural subtyping
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from typing import TYPE_CHECKING, Any, Protocol, Self, runtime_checkable
 
@@ -15,6 +16,48 @@ if TYPE_CHECKING:
     from .data import BatteryBankData, InverterEnergyData, InverterRuntimeData
 
 _LOGGER = logging.getLogger(__name__)
+
+
+class _ReentrantAsyncLock:
+    """Task-reentrant asyncio lock for serialising multi-step transport operations.
+
+    Unlike a plain ``asyncio.Lock``, this lock can be re-acquired by the *same*
+    asyncio task without deadlocking.  This is necessary because high-level
+    operations like ``write_named_parameters`` hold the lock for their entire
+    read-modify-write sequence, but then call ``read_parameters`` /
+    ``write_parameters`` internally — which also try to acquire the same lock.
+
+    Concurrency model:
+        - One operation at a time per transport instance.
+        - A second task that needs the lock suspends at ``await __aenter__``
+          until the current holder releases (``__aexit__``).
+        - The same task can re-enter the lock without blocking (depth counter).
+
+    This is safe in asyncio because context switches only happen at ``await``
+    points.  The check-and-set of ``_owner`` / ``_depth`` is always atomic
+    within a single event-loop turn.
+    """
+
+    def __init__(self) -> None:
+        self._lock = asyncio.Lock()
+        self._owner: asyncio.Task[object] | None = None
+        self._depth: int = 0
+
+    async def __aenter__(self) -> _ReentrantAsyncLock:
+        task = asyncio.current_task()
+        if self._owner is task:
+            self._depth += 1
+            return self
+        await self._lock.acquire()
+        self._owner = task
+        self._depth = 1
+        return self
+
+    async def __aexit__(self, *_: object) -> None:
+        self._depth -= 1
+        if self._depth == 0:
+            self._owner = None
+            self._lock.release()
 
 
 @runtime_checkable
@@ -207,6 +250,7 @@ class BaseTransport:
         """
         self._serial = serial
         self._connected = False
+        self._op_lock = _ReentrantAsyncLock()
 
     @property
     def serial(self) -> str:

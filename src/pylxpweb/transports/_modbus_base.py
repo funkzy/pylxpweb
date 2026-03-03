@@ -32,7 +32,12 @@ from .protocol import BaseTransport
 
 if TYPE_CHECKING:
     from pylxpweb.devices.inverters._features import InverterFamily
-    from pylxpweb.transports.data import BatteryBankData, InverterEnergyData, InverterRuntimeData
+    from pylxpweb.transports.data import (
+        BatteryBankData,
+        InverterEnergyData,
+        InverterRuntimeData,
+        MidboxRuntimeData,
+    )
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -383,18 +388,63 @@ class BaseModbusTransport(RegisterDataMixin, BaseTransport):
         if self._consecutive_errors >= self._max_consecutive_errors:
             await self._reconnect()
 
-        return await super().read_all_input_data()
+        async with self._op_lock:
+            return await super().read_all_input_data()
 
     async def read_battery(
         self,
         include_individual: bool = True,
     ) -> BatteryBankData | None:
         """Read battery information with reconnect on consecutive errors."""
-
         if self._consecutive_errors >= self._max_consecutive_errors:
             await self._reconnect()
 
-        return await super().read_battery(include_individual)
+        async with self._op_lock:
+            return await super().read_battery(include_individual)
+
+    async def read_midbox_runtime(self) -> MidboxRuntimeData:
+        """Read MID/GridBOSS runtime data with reconnect and op-level lock.
+
+        The MID read issues 5 INPUT register reads followed by 1 HOLD register
+        read, with inter-register sleeps between each.  Without op-level
+        serialisation, concurrent writes (e.g. smart-port mode changes) can
+        interleave during those sleeps and cause protocol errors.
+        """
+        if self._consecutive_errors >= self._max_consecutive_errors:
+            await self._reconnect()
+
+        async with self._op_lock:
+            return await super().read_midbox_runtime()
+
+    async def read_parameters(
+        self,
+        start_address: int,
+        count: int,
+    ) -> dict[int, int]:
+        """Read holding registers with op-level lock."""
+        async with self._op_lock:
+            return await super().read_parameters(start_address, count)
+
+    async def write_parameters(
+        self,
+        parameters: dict[int, int],
+    ) -> bool:
+        """Write holding registers with op-level lock."""
+        async with self._op_lock:
+            return await super().write_parameters(parameters)
+
+    async def write_named_parameters(
+        self,
+        parameters: dict[str, Any],
+    ) -> bool:
+        """Read-modify-write named parameters with op-level lock.
+
+        Acquires op_lock for the full call so the RMW is atomic relative to
+        concurrent reads.  The internal calls to read_parameters /
+        write_parameters re-enter the reentrant lock without blocking.
+        """
+        async with self._op_lock:
+            return await super().write_named_parameters(parameters)
 
     # ------------------------------------------------------------------
     # Reconnect (subclasses may override for custom logging)
