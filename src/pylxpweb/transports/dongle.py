@@ -146,6 +146,7 @@ class DongleTransport(RegisterDataMixin, BaseTransport):
         self._dongle_serial = dongle_serial
         self._timeout = timeout
         self._inverter_family = inverter_family
+        self._split_phase: bool = False
         self._connection_retries = connection_retries
         self._inter_register_delay = 0.5  # Dongle needs slower pace than Modbus
         self._reader: asyncio.StreamReader | None = None
@@ -197,6 +198,16 @@ class DongleTransport(RegisterDataMixin, BaseTransport):
                 self._serial,
             )
         self._inverter_family = value
+
+    @property
+    def split_phase(self) -> bool:
+        """Whether this inverter uses split-phase (L1/L2) output."""
+        return self._split_phase
+
+    @split_phase.setter
+    def split_phase(self, value: bool) -> None:
+        """Set the split-phase flag for per-leg power fallback."""
+        self._split_phase = value
 
     async def _discard_initial_data(self) -> None:
         """Discard any initial data sent by the dongle after connection.

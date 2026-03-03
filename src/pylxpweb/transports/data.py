@@ -60,7 +60,7 @@ _MAX_LIFETIME_ENERGY_KWH = 999_999.0
 _RUNTIME_INT_FIELDS: frozenset[str] = frozenset(
     {
         "device_status",
-        "eps_status",
+        "eps_apparent_power",
         "bms_cycle_count",
         "battery_parallel_num",
         "inverter_on_time",
@@ -166,7 +166,7 @@ class InverterRuntimeData:
     eps_l2_voltage: float | None = None  # V (Split-phase L2, ~120V)
     eps_frequency: float | None = None  # Hz
     eps_power: float | None = None  # W
-    eps_status: int | None = None  # Status code
+    eps_apparent_power: int | None = None  # VA
     # EPS per-leg power (split-phase, regs 129-132)
     eps_l1_power: int | None = None  # W
     eps_l2_power: int | None = None  # W
@@ -382,7 +382,7 @@ class InverterRuntimeData:
             eps_voltage_t=scale_runtime_value("vepst", runtime.vepst),
             eps_frequency=scale_runtime_value("feps", runtime.feps),
             eps_power=float(runtime.peps or 0),
-            eps_status=runtime.seps or 0,
+            eps_apparent_power=runtime.seps or 0,
             # Load
             load_power=float(runtime.pToUser or 0),
             # Internal
@@ -402,6 +402,8 @@ class InverterRuntimeData:
         cls,
         input_registers: dict[int, int],
         model_family: str = "EG4_HYBRID",
+        *,
+        split_phase: bool = False,
     ) -> InverterRuntimeData:
         """Create from Modbus input register values.
 
@@ -413,6 +415,8 @@ class InverterRuntimeData:
             input_registers: Dict mapping register address to raw value
             model_family: Inverter family string (``"EG4_HYBRID"``,
                 ``"EG4_OFFGRID"``, or ``"LXP"``).
+            split_phase: If True, compute combined power from per-leg values
+                when the combined register reads 0 (split-phase firmware gap).
 
         Returns:
             Transport-agnostic runtime data with scaling applied
@@ -482,6 +486,21 @@ class InverterRuntimeData:
             load_val = read_scaled(input_registers, load_power_reg)
             kwargs.setdefault("load_power", load_val)
             kwargs.setdefault("power_from_grid", load_val)
+
+        # Split-phase firmware gap: combined power registers (original
+        # three-phase block, regs 0-79) may read 0 while per-leg registers
+        # (extended block, regs 127+) have correct values.  Compute combined
+        # from L1+L2 when the combined register is 0 on split-phase systems.
+        if split_phase:
+            eps_l1 = kwargs.get("eps_l1_power") or 0
+            eps_l2 = kwargs.get("eps_l2_power") or 0
+            if not kwargs.get("eps_power") and (eps_l1 or eps_l2):
+                kwargs["eps_power"] = float(eps_l1 + eps_l2)
+
+            eps_va_l1 = kwargs.get("eps_l1_apparent_power") or 0
+            eps_va_l2 = kwargs.get("eps_l2_apparent_power") or 0
+            if not kwargs.get("eps_apparent_power") and (eps_va_l1 or eps_va_l2):
+                kwargs["eps_apparent_power"] = eps_va_l1 + eps_va_l2
 
         return cls(timestamp=datetime.now(), **kwargs)
 

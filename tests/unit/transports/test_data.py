@@ -84,7 +84,7 @@ class TestInverterRuntimeData:
         assert data.battery_charge_power == 500.0
         assert data.grid_voltage_r == 241.0
         assert data.grid_frequency == 59.98
-        assert data.eps_status == 1
+        assert data.eps_apparent_power == 1
         assert data.bus_voltage_1 == 370.0
 
     def test_from_modbus_registers(self) -> None:
@@ -511,3 +511,105 @@ class TestMidboxRuntimeLifetimeValues:
         result = data.lifetime_energy_values()
         assert all(v is None for v in result.values())
         assert len(result) == 24
+
+
+class TestSplitPhaseEpsFallback:
+    """Test split-phase EPS power L1+L2 fallback in from_modbus_registers().
+
+    Split-phase inverters (FlexBOSS, 18kPV, 12kPV) may report 0 in the
+    combined EPS power register (reg 24) while per-leg registers (129/130)
+    have correct values. The fallback computes combined from L1+L2.
+    """
+
+    @staticmethod
+    def _base_registers() -> dict[int, int]:
+        """Minimal register set for a split-phase inverter."""
+        return {
+            0: 0,  # Status
+            5: (100 << 8) | 50,  # SOC=50, SOH=100
+            15: 5998,  # Grid frequency
+        }
+
+    def test_eps_fallback_split_phase_combined_zero(self) -> None:
+        """Combined eps_power=0, L1/L2 non-zero → fallback fires."""
+        regs = self._base_registers()
+        regs[24] = 0  # EPS power combined = 0
+        regs[129] = 1213  # EPS L1 power = 1213W
+        regs[130] = 423  # EPS L2 power = 423W
+
+        data = InverterRuntimeData.from_modbus_registers(
+            regs, "EG4_HYBRID", split_phase=True
+        )
+        assert data.eps_power == 1636.0  # 1213 + 423
+        assert data.eps_l1_power == 1213
+        assert data.eps_l2_power == 423
+
+    def test_eps_no_fallback_when_not_split_phase(self) -> None:
+        """split_phase=False: combined=0 stays 0 even with L1/L2 values."""
+        regs = self._base_registers()
+        regs[24] = 0
+        regs[129] = 1213
+        regs[130] = 423
+
+        data = InverterRuntimeData.from_modbus_registers(
+            regs, "EG4_HYBRID", split_phase=False
+        )
+        assert data.eps_power == 0.0
+        assert data.eps_l1_power == 1213
+        assert data.eps_l2_power == 423
+
+    def test_eps_no_fallback_when_combined_nonzero(self) -> None:
+        """Combined register has value → no fallback even on split-phase."""
+        regs = self._base_registers()
+        regs[24] = 1500  # Combined already populated
+        regs[129] = 800
+        regs[130] = 700
+
+        data = InverterRuntimeData.from_modbus_registers(
+            regs, "EG4_HYBRID", split_phase=True
+        )
+        assert data.eps_power == 1500.0  # Uses combined, not L1+L2
+
+    def test_eps_no_fallback_when_all_zero(self) -> None:
+        """On-grid (EPS inactive): all zeros → no false computation."""
+        regs = self._base_registers()
+        regs[24] = 0
+        regs[129] = 0
+        regs[130] = 0
+
+        data = InverterRuntimeData.from_modbus_registers(
+            regs, "EG4_HYBRID", split_phase=True
+        )
+        assert data.eps_power == 0.0
+
+    def test_eps_apparent_power_fallback(self) -> None:
+        """EPS apparent power (VA) also gets L1+L2 fallback."""
+        regs = self._base_registers()
+        regs[25] = 0  # EPS apparent power combined = 0
+        regs[131] = 1300  # EPS L1 apparent power
+        regs[132] = 500  # EPS L2 apparent power
+
+        data = InverterRuntimeData.from_modbus_registers(
+            regs, "EG4_HYBRID", split_phase=True
+        )
+        assert data.eps_apparent_power == 1800  # 1300 + 500
+
+    def test_eps_apparent_power_field_rename(self) -> None:
+        """Verify eps_apparent_power (formerly eps_status) maps correctly."""
+        regs = self._base_registers()
+        regs[25] = 1650  # EPS apparent power (VA)
+
+        data = InverterRuntimeData.from_modbus_registers(regs, "EG4_HYBRID")
+        assert data.eps_apparent_power == 1650
+
+    def test_eps_fallback_only_l1_present(self) -> None:
+        """Only L1 has value, L2 is zero → fallback uses L1 alone."""
+        regs = self._base_registers()
+        regs[24] = 0
+        regs[129] = 500
+        regs[130] = 0
+
+        data = InverterRuntimeData.from_modbus_registers(
+            regs, "EG4_HYBRID", split_phase=True
+        )
+        assert data.eps_power == 500.0

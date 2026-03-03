@@ -87,6 +87,7 @@ class BaseModbusTransport(RegisterDataMixin, BaseTransport):
         self._unit_id = unit_id
         self._timeout = timeout
         self._inverter_family = inverter_family
+        self._split_phase: bool = False
         self._retries = retries
         self._retry_delay = retry_delay
         self._inter_register_delay = inter_register_delay
@@ -122,6 +123,16 @@ class BaseModbusTransport(RegisterDataMixin, BaseTransport):
                 self._serial,
             )
         self._inverter_family = value
+
+    @property
+    def split_phase(self) -> bool:
+        """Whether this inverter uses split-phase (L1/L2) output."""
+        return self._split_phase
+
+    @split_phase.setter
+    def split_phase(self, value: bool) -> None:
+        """Set the split-phase flag for per-leg power fallback."""
+        self._split_phase = value
 
     # ------------------------------------------------------------------
     # Register Read/Write (with retry and error tracking)

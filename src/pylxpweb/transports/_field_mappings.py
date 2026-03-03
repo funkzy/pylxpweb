@@ -51,7 +51,7 @@ RUNTIME_FIELD: dict[str, str | None] = {
     "eps_l2_voltage": "eps_l2_voltage",
     "eps_frequency": "eps_frequency",
     "eps_power": "eps_power",
-    "eps_apparent_power": "eps_status",
+    "eps_apparent_power": "eps_apparent_power",
     "power_to_grid": "power_to_grid",
     "power_to_user": "power_from_grid",
     # Load

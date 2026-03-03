@@ -163,7 +163,7 @@ REGISTER_LABELS: dict[int, str] = {
     22: "eps_voltage_t (scale /10)",
     23: "eps_frequency (scale /100)",
     24: "eps_power / Peps (W)",
-    25: "eps_status / Seps",
+    25: "eps_apparent_power / Seps (VA)",
     26: "power_to_grid / Ptogrid (W)",
     27: "load_power / Ptouser (W)",
     38: "bus_voltage_1 (scale /10)",

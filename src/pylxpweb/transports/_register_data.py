@@ -89,6 +89,7 @@ if TYPE_CHECKING:
         _serial: str
         _inter_register_delay: float
         _inverter_family: InverterFamily | None
+        _split_phase: bool
 
         async def _read_input_registers(self, start: int, count: int) -> list[int]: ...
 
@@ -434,7 +435,9 @@ class RegisterDataMixin(_DataMixinBase):
         """
         input_registers = await self._read_register_groups()
         family = self._inverter_family.value if self._inverter_family else "EG4_HYBRID"
-        return InverterRuntimeData.from_modbus_registers(input_registers, family)
+        return InverterRuntimeData.from_modbus_registers(
+            input_registers, family, split_phase=self._split_phase
+        )
 
     async def read_energy(self) -> InverterEnergyData:
         """Read energy statistics via input registers.
@@ -567,7 +570,9 @@ class RegisterDataMixin(_DataMixinBase):
         family = self._inverter_family.value if self._inverter_family else "EG4_HYBRID"
 
         # Construct all three data types from the shared snapshot
-        runtime = InverterRuntimeData.from_modbus_registers(input_registers, family)
+        runtime = InverterRuntimeData.from_modbus_registers(
+            input_registers, family, split_phase=self._split_phase
+        )
         energy = InverterEnergyData.from_modbus_registers(input_registers, family)
 
         # Read individual battery registers (5000+) if present
