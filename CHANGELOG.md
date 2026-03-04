@@ -5,6 +5,32 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.9.26] - 2026-03-04
+
+### Added
+
+- **Battery protocol framework**: Complete battery protocol system for direct RS485 battery
+  communication, including base classes, EG4 master protocol (firmware-derived register map),
+  EG4 slave protocol (standard EG4-LL register map), auto-detection, and BatteryModbusTransport
+  for direct RS485 battery reading
+- **Battery register collection script**: Utility for capturing raw battery register data
+
+### Fixed
+
+- **Split-phase EPS power fallback**: When combined EPS power/apparent power registers read 0W
+  (firmware gap on split-phase inverters), `from_modbus_registers(split_phase=True)` now computes
+  combined values from L1+L2 per-leg registers
+- **eps_apparent_power field mapping**: Corrected legacy `eps_status` field name to
+  `eps_apparent_power` in transport field mappings
+- **BatteryModbusTransport context manager**: Added missing async context manager and removed
+  duplicate Modbus read
+
+### Changed
+
+- **BatteryProtocol as ABC**: Battery protocols now use abstract base class with immutable
+  `register_blocks` property
+- **Shared battery protocol utilities**: Consolidated duplicated protocol utilities into base module
+
 ## [0.9.17] - 2026-02-26
 
 ### Added
