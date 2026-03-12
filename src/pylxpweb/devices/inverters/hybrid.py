@@ -9,6 +9,8 @@ This module provides the HybridInverter class for hybrid inverters that support:
 
 from __future__ import annotations
 
+import asyncio
+
 from pylxpweb.constants import ScheduleType
 from pylxpweb.exceptions import LuxpowerDeviceError
 
@@ -336,7 +338,10 @@ class HybridInverter(GenericInverter):
 
         # Write each register individually — inverter rejects FC16 (write
         # multiple) for schedule registers, only FC06 (write single) works.
+        # 3.5s inter-register delay gives firmware time to commit before the
+        # next write; without it some units reject the second FC06.
         await self.write_parameters({start_reg: pack_time(start_hour, start_minute)})
+        await asyncio.sleep(3.5)
         await self.write_parameters({end_reg: pack_time(end_hour, end_minute)})
         return True
 
