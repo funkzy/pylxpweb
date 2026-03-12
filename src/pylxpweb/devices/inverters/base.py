@@ -312,6 +312,7 @@ class BaseInverter(FirmwareUpdateMixin, InverterRuntimePropertiesMixin, BaseDevi
         """
         # Import here to avoid circular dependency
         from pylxpweb.devices.inverters.generic import GenericInverter
+        from pylxpweb.devices.inverters.hybrid import HybridInverter
 
         # Ensure transport is connected
         if not transport.is_connected:
@@ -415,9 +416,14 @@ class BaseInverter(FirmwareUpdateMixin, InverterRuntimePropertiesMixin, BaseDevi
         # In transport mode, all data comes from transport, not client
         placeholder_client: Any = None
 
-        # Create GenericInverter with transport
-        # Note: We pass None as client since transport handles all data fetching
-        inverter = GenericInverter(
+        # Use HybridInverter for families that support schedules and charge
+        # control (EG4_HYBRID, LXP); GenericInverter for everything else.
+        inverter_cls = (
+            HybridInverter
+            if model_family in (InverterFamily.EG4_HYBRID, InverterFamily.LXP)
+            else GenericInverter
+        )
+        inverter = inverter_cls(
             client=placeholder_client,
             serial_number=transport.serial,
             model=detected_model,
@@ -430,7 +436,8 @@ class BaseInverter(FirmwareUpdateMixin, InverterRuntimePropertiesMixin, BaseDevi
         inverter._features_detected = True
 
         _LOGGER.info(
-            "Created transport-backed inverter %s (model=%s, family=%s)",
+            "Created transport-backed %s %s (model=%s, family=%s)",
+            inverter_cls.__name__,
             transport.serial,
             detected_model,
             model_family.value,

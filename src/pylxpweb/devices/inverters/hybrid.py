@@ -345,6 +345,62 @@ class HybridInverter(GenericInverter):
         await self.write_parameters({end_reg: pack_time(end_hour, end_minute)})
         return True
 
+    async def _set_schedule_start(
+        self,
+        schedule_type: ScheduleType,
+        period: int,
+        hour: int,
+        minute: int,
+    ) -> bool:
+        """Set only the start time for a schedule period (single register write).
+
+        Args:
+            schedule_type: Which schedule to set
+            period: Time period index (0, 1, or 2)
+            hour: Start hour (0-23)
+            minute: Start minute (0-59)
+
+        Returns:
+            True if successful
+        """
+        from pylxpweb.constants import SCHEDULE_CONFIGS, pack_time
+
+        if period not in (0, 1, 2):
+            raise ValueError(f"period must be 0, 1, or 2, got {period}")
+
+        base_reg = SCHEDULE_CONFIGS[schedule_type].base_register
+        start_reg = base_reg + (period * 2)
+        await self.write_parameters({start_reg: pack_time(hour, minute)})
+        return True
+
+    async def _set_schedule_end(
+        self,
+        schedule_type: ScheduleType,
+        period: int,
+        hour: int,
+        minute: int,
+    ) -> bool:
+        """Set only the end time for a schedule period (single register write).
+
+        Args:
+            schedule_type: Which schedule to set
+            period: Time period index (0, 1, or 2)
+            hour: End hour (0-23)
+            minute: End minute (0-59)
+
+        Returns:
+            True if successful
+        """
+        from pylxpweb.constants import SCHEDULE_CONFIGS, pack_time
+
+        if period not in (0, 1, 2):
+            raise ValueError(f"period must be 0, 1, or 2, got {period}")
+
+        base_reg = SCHEDULE_CONFIGS[schedule_type].base_register
+        end_reg = base_reg + (period * 2) + 1
+        await self.write_parameters({end_reg: pack_time(hour, minute)})
+        return True
+
     async def _get_schedule(self, schedule_type: ScheduleType, period: int) -> dict[str, int]:
         """Read a time period schedule via Modbus (generic helper).
 
@@ -521,6 +577,47 @@ class HybridInverter(GenericInverter):
             {'start_hour': 16, 'start_minute': 0, 'end_hour': 21, 'end_minute': 0}
         """
         return await self._get_schedule(ScheduleType.FORCED_DISCHARGE, period)
+
+    # ── Individual start/end setters ──────────────────────────────────
+    # These write a single register instead of two, avoiding the 3.5s
+    # inter-register delay.  Useful when only one end of the time window
+    # is being changed (e.g., from a Home Assistant TimeEntity).
+
+    async def set_ac_charge_schedule_start(
+        self, period: int, hour: int, minute: int
+    ) -> bool:
+        """Set only the start time for an AC charge schedule period."""
+        return await self._set_schedule_start(ScheduleType.AC_CHARGE, period, hour, minute)
+
+    async def set_ac_charge_schedule_end(
+        self, period: int, hour: int, minute: int
+    ) -> bool:
+        """Set only the end time for an AC charge schedule period."""
+        return await self._set_schedule_end(ScheduleType.AC_CHARGE, period, hour, minute)
+
+    async def set_forced_charge_schedule_start(
+        self, period: int, hour: int, minute: int
+    ) -> bool:
+        """Set only the start time for a forced charge schedule period."""
+        return await self._set_schedule_start(ScheduleType.FORCED_CHARGE, period, hour, minute)
+
+    async def set_forced_charge_schedule_end(
+        self, period: int, hour: int, minute: int
+    ) -> bool:
+        """Set only the end time for a forced charge schedule period."""
+        return await self._set_schedule_end(ScheduleType.FORCED_CHARGE, period, hour, minute)
+
+    async def set_forced_discharge_schedule_start(
+        self, period: int, hour: int, minute: int
+    ) -> bool:
+        """Set only the start time for a forced discharge schedule period."""
+        return await self._set_schedule_start(ScheduleType.FORCED_DISCHARGE, period, hour, minute)
+
+    async def set_forced_discharge_schedule_end(
+        self, period: int, hour: int, minute: int
+    ) -> bool:
+        """Set only the end time for a forced discharge schedule period."""
+        return await self._set_schedule_end(ScheduleType.FORCED_DISCHARGE, period, hour, minute)
 
     async def get_ac_charge_type(self) -> int:
         """Get AC charge type (what the charge schedule is based on).
